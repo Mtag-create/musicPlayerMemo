@@ -1,4 +1,13 @@
-AIにコードを書かせて音楽プレイヤーを作るー自作感を薄めたい
+AIはこの仕様書に従ってコードを実装する。
+
+設計を優先し、保守性を重視する。
+
+不明点は推測で実装せず質問する。
+
+実装はPhase順に行い、一度に1機能のみ追加する。
+
+毎回コンパイル可能な状態を維持する。
+
 #目標: 自分のオリジナルの音楽プレイヤーを作りたいー広告に邪魔されずに通学途中に音楽を聴きたい
   kotlin/rustを使う
     kotlinではUI、音楽の再生のみ担当
@@ -69,6 +78,86 @@ rust/
 ・選曲アルゴリズム
 
 # データ構造
-Song
-Feature
-History
+  Song
+    id
+    title
+    artist
+    path
+    feature
+    history
+
+  Feature
+    bpm
+    energy
+    brightness
+    key
+    rms
+    spectrum
+    chroma
+
+  History
+    playCount
+    skipCount
+    favorite
+    lastPlayed
+
+# 開発ルール
+・一度に1機能のみ実装する
+・実装前に方針を説明する
+・既存コードを壊さない
+・不要なリファクタリングは禁止
+・コンパイル可能な状態を維持する
+・変更したファイル名を必ず示す
+
+# コード規約
+・MVVM
+・Repositoryパターン
+・UIとロジックを分離する
+・Null安全
+・SOLIDを意識
+・1関数1責務
+・マジックナンバー禁止
+・コメントは必要最低限
+
+# 通信
+RustはJNI経由で呼び出す。
+
+Kotlin
+    曲一覧
+        ↓
+Rust
+    次の曲IDを返す
+        ↓
+Kotlin
+    ExoPlayerで再生
+
+# 禁止事項
+・ライブラリを勝手に変更しない
+・フォルダ構成を変更しない
+・変数名を変更しない
+・使用技術を変更しない
+・未実装部分を削除しない
+
+# 開発順序
+Phase1
+音楽再生
+
+Phase2
+JSON管理
+
+Phase3
+Rust連携
+
+Phase4
+特徴量解析
+
+Phase5
+選曲アルゴリズム
+
+Phase6
+履歴学習
+
+Phase7
+UI改善
+俺が納得いくまでそれぞれのフェーズを妥協しない
+
