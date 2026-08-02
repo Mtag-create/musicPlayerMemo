@@ -1,1 +1,42 @@
+まだないがあった方がいいもの
+  Brightness
+  エネルギー変化量/フレーム(+-情報有) Curve
+決めるときの軸
+  テンション
+    Energy
+  速度感
+    BPM
+  雰囲気
+    Chroma
+    Key
+    Brightness
+  流れ
+    Section
+    Energy Curve
+  リズム
+    Beat
+    Kick
+    Onset
+  ダイナミクス
+    エネルギー変化量/フレーム(+-情報有) Curve
 
+情報分類
+
+  フレーム毎計算
+    Energy
+    Chroma
+    Brightness
+    エネルギー変化量/フレーム (+/-) Curve
+
+  固定量
+    BPM
+    Key
+
+  区間毎計算
+    Section
+    Energy Curve
+
+  イベント情報
+    Beat
+    Kick
+    Onset
