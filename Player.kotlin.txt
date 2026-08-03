@@ -35,4 +35,41 @@ PC側で開発した音楽解析システム「MyMusicAnalyzer」と連携し、
 それぞれのファイル名は役割を明確化するための命名であり、
 設計上の理由がある場合のみ変更を提案してください。
 
+rust/アルゴリズム
+algorithm/
+│
+├── Cargo.toml
+│
+└── src/
+    │
+    ├── data/    //解析済みの楽曲データを、選曲アルゴリズムが扱える形にする
+    │   ├── inport.rs    //.mmzを展開しtrackに役割を明示してから渡す
+    │   ├── track.rs    //アルゴリズムに使うそのままの形に直す
+    │   └── mod.rs
+    │
+    ├── selection/    //次の曲を選ぶ核心
+    │   ├── candidate.rs
+    │   ├── scoring.rs
+    │   ├── probability.rs
+    │   ├── selector.rs
+    │   ├── mod.rs
+    │   └── flow/
+    │       ├── short_wave.rs
+    │       ├── long_wave.rs
+    │       ├── curve.rs
+    │       └── mod.rs
+    │
+    ├── transition/
+    │   ├── transition.rs
+    │   ├── energy.rs
+    │   ├── bpm.rs
+    │   ├── key.rs
+    │   └── mod.rs
+    │
+
+    │
+    ├── config.rs
+    ├── error.rs
+    └── lib.rs
+
 
