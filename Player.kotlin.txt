@@ -48,28 +48,20 @@ algorithm/
     │   └── mod.rs
     │
     ├── selection/    //次の曲を選ぶ核心
-    │   ├── candidate.rs
-    │   ├── scoring.rs
-    │   ├── probability.rs
-    │   ├── selector.rs
-    │   ├── mod.rs
-    │   └── flow/
-    │       ├── short_wave.rs
-    │       ├── long_wave.rs
-    │       ├── curve.rs
-    │       └── mod.rs
-    │
-    ├── transition/
-    │   ├── transition.rs
-    │   ├── energy.rs
-    │   ├── bpm.rs
-    │   ├── key.rs
+│   │   ├── flow/    //曲同士の中で生まれる流れ
+    │   │    ├── short_wave.rs    //直近7曲の中での流れ
+    │   │    ├── long_wave.rs    //70曲周期での流れ
+    │   │    ├── curve.rs    //理想の流れ
+    │   │    └── mod.rs
+    │   ├── candidate.rs    //曲候補
+    │   ├── scoring.rs    //候補曲の評価
+    │   ├── probability.rs    //高評価の曲数曲のうちから選び出される確率
+    │   ├── selector.rs    //最終決定
     │   └── mod.rs
     │
-
-    │
-    ├── config.rs
-    ├── error.rs
-    └── lib.rs
+    ├── main.rs    //PCでの実行テスト
+    ├── config.rs    //マジックナンバーの意味付け/設定値
+    ├── error.rs    //エラー
+    └── lib.rs    
 
 
