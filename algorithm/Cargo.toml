@@ -1,0 +1,26 @@
+[package]
+name = "algorithm"
+version = "0.1.0"
+edition = "2021"
+
+# crate-type:
+# - "cdylib": Android(JNI)から動的ライブラリとして読み込むために必要
+# - "lib":     Rust側のテスト/他クレートからの利用のために必要
+[lib]
+name = "algorithm"
+crate-type = ["cdylib", "lib"]
+
+# PCでの実行テスト用エントリポイント(main.rs)
+# bin名をlib名(algorithm)と分けて出力ファイル名の衝突を避ける
+[[bin]]
+name = "algorithm_pc_test"
+path = "src/main.rs"
+
+[dependencies]
+# 依存クレートはPhase5(JNI連携)・Phase6(選曲アルゴリズム)で
+# 必要になった時点で個別に追加する(Phase0時点では未確定のため追加しない)
+jni = "0.22.4"
+mmz_format = { path = "../mmz_format" }
+rand = "0.10"
+serde = { version = "1", features = ["derive"] }
+rmp-serde = "1"
