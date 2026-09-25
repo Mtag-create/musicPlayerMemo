@@ -1,6 +1,0 @@
-[workspace]
-members = [
-    "my_music_analyzer"
-]
-
-resolver = "3"
