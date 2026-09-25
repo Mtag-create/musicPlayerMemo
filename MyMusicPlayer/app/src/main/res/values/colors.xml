@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Theme.kt の background(0xFF0A0A0F)と同じ色。起動時の白フラッシュ防止用。 -->
+    <color name="launch_background">#FF0A0A0F</color>
+</resources>
