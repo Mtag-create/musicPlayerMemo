@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.material3.MaterialTheme
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mymusicplayer.player.PlayerViewModel
+import com.mymusicplayer.ui.screen.EditTracksScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,6 +53,13 @@ private fun MyMusicPlayerApp() {
             }
             composable(Screen.Settings.route) {
                 SettingsScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToEditTracks = { navController.navigate(Screen.EditTracks.route) },
+                    viewModel = playerViewModel
+                )
+            }
+            composable(Screen.EditTracks.route) {
+                EditTracksScreen(
                     onNavigateBack = { navController.popBackStack() },
                     viewModel = playerViewModel
                 )

@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mymusicplayer.player.PlayerViewModel
@@ -35,6 +36,7 @@ import com.mymusicplayer.storage.MusicStorage
  * - 曲名タップ: Rust側の「現在の曲」として即座に設定(setCurrentTrack)し、その場で再生開始してPlayer画面へ戻る
  * - 「コピー」ボタン: 曲名をクリップボードにコピーする
  * - 「次に再生」ボタン: 今すぐ割り込まず、今の曲が終わったタイミングでこの曲を再生するよう予約する
+ * - 「SET」表示の曲: live_music/フォルダの手動再生専用の曲(ライブのフルセット等)。Auto DJでは選ばれず、ここから選んだときだけ再生される
  */
 @Composable
 fun TrackListScreen(
@@ -42,6 +44,8 @@ fun TrackListScreen(
     viewModel: PlayerViewModel
 ) {
     val availableTracks by viewModel.availableTracks.collectAsState()
+    val manualOnlyIds by viewModel.manualOnlyTrackIds.collectAsState()
+    val selectedTrackId by viewModel.selectedTrackId.collectAsState()
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
 
@@ -58,6 +62,8 @@ fun TrackListScreen(
         ) {
             items(availableTracks) { id ->
                 val title = MusicStorage.displayTitle(id)
+                val isManualOnly = id in manualOnlyIds
+                val isCurrent = id == selectedTrackId
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -73,8 +79,22 @@ fun TrackListScreen(
                             }
                             .padding(vertical = 10.dp),
                         fontSize = 16.sp,
-                        color = MaterialTheme.colorScheme.onSurface
+                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isCurrent) {
+                            MaterialTheme.colorScheme.secondary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
                     )
+
+                    // 手動再生専用(Auto DJの候補に入らない)曲の目印
+                    if (isManualOnly) {
+                        Text(
+                            text = "SET",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
 
                     TextButton(onClick = {
                         clipboardManager.setText(AnnotatedString(title))

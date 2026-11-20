@@ -2,7 +2,6 @@ package com.mymusicplayer.storage
 
 import android.content.Context
 import androidx.media3.common.MediaItem
-import com.mymusicplayer.BuildConfig
 import java.io.File
 import androidx.media3.common.MediaMetadata
 
@@ -20,23 +19,43 @@ object MusicStorage {
     private const val MUSIC_ASSET_DIR = "music"
     private const val DEBUG_MUSIC_DIR = "music"
 
+    /**
+     * ライブのフルセットなど、Auto DJの選曲対象にしない曲を置くフォルダ(music/とは別)。
+     * .mmz(解析サマリ)は不要で、.wavを置くだけでよい。
+     */
+    private const val LIVE_DIR = "live_music"
+
+    /** live_music/の曲のIDに付ける接頭辞。music/内の同名ファイルとIDが衝突しないようにする。 */
+    private const val LIVE_ID_PREFIX = "$LIVE_DIR/"
+
     sealed class AudioSource {
         data class Asset(val assetPath: String) : AudioSource()
         data class LocalFile(val file: File) : AudioSource()
     }
 
+    /**
+     * @param mmzBytesProvider 解析サマリ(.mmz)の読み出し関数。live_music/の曲(手動再生専用)はnull。
+     *
+     * live_music/の曲は「手動再生専用」として扱う。
+     * Rust側の選曲ライブラリには渡されないため、Auto DJの候補には一切入らず、
+     * 曲一覧から手動で選んだとき(または「次に再生」予約したとき)だけ再生される。
+     */
     data class TrackFiles(
         val id: String,
         val audioSource: AudioSource,
-        val mmzBytesProvider: () -> ByteArray
-    )
+        val mmzBytesProvider: (() -> ByteArray)?
+    ) {
+        val manualOnly: Boolean get() = mmzBytesProvider == null
+    }
 
+    /** music/(Auto DJ対象、.mmz必須)とlive_music/(手動再生専用)の両方の曲を返す。 */
+    /** music/(Auto DJ対象、.mmz必須)とlive_music/(手動再生専用)の両方の曲を返す。 */
     fun listAvailableTracks(context: Context): List<TrackFiles> {
-        return if (BuildConfig.DEBUG) {
-            listFromLocalStorage(context)
-        } else {
-            listFromAssets(context)
-        }
+        // filesDir(取り込み済み・adb push)を優先し、assetsと同じIDがあれば重複させない
+        return (
+                listFromLocalStorage(context) + listLiveFromLocalStorage(context) +
+                        listFromAssets(context) + listLiveFromAssets(context)
+                ).distinctBy { it.id }
     }
 
     /** AudioSourceの違いを吸収し、再生可能なMediaItemを返す。 */
@@ -59,15 +78,15 @@ object MusicStorage {
             .build()
     }
 
-    /** ファイル名の拡張子(.wav)を除いた、表示用のタイトルを返す。 */
-    fun displayTitle(id: String): String = id.removeSuffix(".wav")
+    /** フォルダの接頭辞と拡張子(.wav)を除いた、表示用のタイトルを返す。 */
+    fun displayTitle(id: String): String = id.removePrefix(LIVE_ID_PREFIX).removeSuffix(".mp3")
 
     private fun listFromAssets(context: Context): List<TrackFiles> {
         val files = context.assets.list(MUSIC_ASSET_DIR) ?: emptyArray()
-        val wavFiles = files.filter { it.endsWith(".wav") }
+        val wavFiles = files.filter { it.endsWith(".mp3") }
 
         return wavFiles.mapNotNull { wavFile ->
-            val baseName = wavFile.removeSuffix(".wav")
+            val baseName = wavFile.removeSuffix(".mp3")
             val mmzFile = "$baseName.mmz"
             if (files.contains(mmzFile)) {
                 TrackFiles(
@@ -83,13 +102,24 @@ object MusicStorage {
         }
     }
 
+    private fun listLiveFromAssets(context: Context): List<TrackFiles> {
+        val files = context.assets.list(LIVE_DIR) ?: emptyArray()
+        return files.filter { it.endsWith(".mp3") }.map { wavFile ->
+            TrackFiles(
+                id = "$LIVE_ID_PREFIX$wavFile",
+                audioSource = AudioSource.Asset("$LIVE_DIR/$wavFile"),
+                mmzBytesProvider = null
+            )
+        }
+    }
+
     private fun listFromLocalStorage(context: Context): List<TrackFiles> {
         val dir = File(context.filesDir, DEBUG_MUSIC_DIR)
         val files = dir.listFiles() ?: emptyArray()
-        val wavFiles = files.filter { it.name.endsWith(".wav") }
+        val wavFiles = files.filter { it.name.endsWith(".mp3") }
 
         return wavFiles.mapNotNull { wavFile ->
-            val baseName = wavFile.name.removeSuffix(".wav")
+            val baseName = wavFile.name.removeSuffix(".mp3")
             val mmzFile = File(dir, "$baseName.mmz")
             if (mmzFile.exists()) {
                 TrackFiles(
@@ -100,6 +130,21 @@ object MusicStorage {
             } else {
                 null
             }
+        }
+    }
+
+    /** Debug用: filesDir/live_music/ を(無ければ作成して)読む。adb pushの置き場所になる。 */
+    private fun listLiveFromLocalStorage(context: Context): List<TrackFiles> {
+        val dir = File(context.filesDir, LIVE_DIR)
+        dir.mkdirs()
+        val wavFiles = (dir.listFiles() ?: emptyArray()).filter { it.name.endsWith(".mp3") }
+
+        return wavFiles.map { wavFile ->
+            TrackFiles(
+                id = "$LIVE_ID_PREFIX${wavFile.name}",
+                audioSource = AudioSource.LocalFile(wavFile),
+                mmzBytesProvider = null
+            )
         }
     }
 }

@@ -91,7 +91,7 @@ fun PlayerScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
+                .weight(0.75f),
             contentAlignment = Alignment.Center
         ) {
             Text(

@@ -94,11 +94,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                                 if (_autoDjEnabled.value) {
                                     viewModelScope.launch(Dispatchers.IO) {
                                         val queued = _queuedTrackId.value
-                                        if (queued != null) {
-                                            _queuedTrackId.value = null
-                                            setCurrentTrackAndApply(queued)
-                                        } else {
-                                            playSelectedNext()
+                                        when {
+                                            queued != null -> {
+                                                _queuedTrackId.value = null
+                                                playTrackById(queued)
+                                            }
+                                            prefetchedNext != null -> {
+                                                // 先読み済み: Rust呼び出しを待たずに即座に切り替える
+                                                applySelectionResponse(prefetchedNext!!)
+                                            }
+                                            else -> {
+                                                // 先読みが間に合わなかった場合のフォールバック
+                                                playSelectedNext()
+                                            }
                                         }
                                     }
                                 }
@@ -164,6 +172,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _availableTracks = MutableStateFlow<List<String>>(emptyList())
     val availableTracks: StateFlow<List<String>> = _availableTracks
 
+    /** .mmzが無く、Auto DJの選曲候補に入らない「手動再生専用」の曲ID(ライブのフルセット等)。 */
+    private val _manualOnlyTrackIds = MutableStateFlow<Set<String>>(emptySet())
+    val manualOnlyTrackIds: StateFlow<Set<String>> = _manualOnlyTrackIds
+
     private val _queuedTrackId = MutableStateFlow<String?>(null)
     val queuedTrackId: StateFlow<String?> = _queuedTrackId
 
@@ -177,11 +189,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val loopEnabled: StateFlow<Boolean> = _loopEnabled
 
     /** Settings画面で設定するループ回数。-1は無限ループ、それ以外は1以上の自然数のみを許可する。 */
-    private val _loopCount = MutableStateFlow(-1)
+    private val _loopCount = MutableStateFlow(1)
     val loopCount: StateFlow<Int> = _loopCount
 
     /** ループ有効化時点の残り回数。-1(無限)の間は減らさない。0になったらループを終了する。 */
     private var remainingLoops = 0
+
+    /**
+     * 「次に再生する曲」をあらかじめRustに選ばせておいた結果。
+     * 曲の再生を開始した直後に選んでおくことで、曲が終わった瞬間はRust呼び出しを待たずに即座に切り替えられる。
+     * Rust側は選曲(selectNext)のたびにcurrent_track_idを書き換えるため、
+     * 新しい曲を再生するたびに必ずここをnullへリセットしてから、あらためて1回だけ先読みを行う。
+     */
+    private var prefetchedNext: SelectNextResponse? = null
 
     /** ループアイコンのタップで呼ばれる。オンにする瞬間、その時点のループ回数設定を残り回数として取り込む。 */
     fun toggleLoop() {
@@ -250,8 +270,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             val availableTracks = MusicStorage.listAvailableTracks(application)
             trackFilesById = availableTracks.associateBy { it.id }
 
-            val entries = availableTracks.map { trackFiles ->
-                MmzFileEntry(id = trackFiles.id, mmzBytes = trackFiles.mmzBytesProvider())
+            // 再読み込みで消えた/名前が変わった曲を、先読み結果と「次に再生」の予約から外す
+            if (prefetchedNext?.nextTrackId?.let { it !in trackFilesById } == true) {
+                prefetchedNext = null
+            }
+            if (_queuedTrackId.value?.let { it !in trackFilesById } == true) {
+                _queuedTrackId.value = null
+            }
+
+            // 手動再生専用の曲(.mmzなし)はRustのライブラリに渡さない = Auto DJの候補にならない
+            val entries = availableTracks.mapNotNull { trackFiles ->
+                trackFiles.mmzBytesProvider?.let { provider ->
+                    MmzFileEntry(id = trackFiles.id, mmzBytes = provider())
+                }
             }
 
             val request = InitLibraryRequest(files = entries)
@@ -264,7 +295,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 trackCount = response.trackCount,
                 failedIds = response.failedIds
             )
-            _availableTracks.value = trackFilesById.keys.sortedBy { MusicStorage.displayTitle(it) }
+            _manualOnlyTrackIds.value = availableTracks.filter { it.manualOnly }.map { it.id }.toSet()
+            // 手動再生専用(SET)の曲を先頭にまとめ、それぞれの中は曲名順に並べる
+            _availableTracks.value = trackFilesById.keys.sortedWith(
+                compareByDescending<String> { it in _manualOnlyTrackIds.value }
+                    .thenBy { MusicStorage.displayTitle(it) }
+            )
         }
     }
 
@@ -276,8 +312,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private suspend fun applySelectionResponse(response: SelectNextResponse) {
-        // 新しい曲に切り替わるため、前の曲のループ設定は引き継がない
+        // 新しい曲に切り替わるため、前の曲のループ設定・先読み結果は引き継がない
         _loopEnabled.value = false
+        prefetchedNext = null
         _selectedTrackId.value = response.nextTrackId
 
         val id = response.nextTrackId
@@ -314,9 +351,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             controller?.prepare()
             controller?.play()
         }
+
+        // 曲の再生を始めた直後に、次の曲をあらかじめ選んでおく(Auto DJが有効な間だけ)。
+        // これにより、この曲が終わった瞬間はRust呼び出しの完了を待たずに次の曲へ切り替えられる。
+        if (_autoDjEnabled.value) {
+            prefetchedNext = requestSelectNext()
+        }
     }
 
-    private suspend fun playSelectedNext() {
+    /** Rustに選曲(スコアリング)させ、結果をそのまま返す。現在の重み設定(スライダー値)を使う。 */
+    private suspend fun requestSelectNext(): SelectNextResponse {
         val request = SelectNextRequest(
             energyMultiplier = _energyMultiplier.value,
             bpmMultiplier = _bpmMultiplier.value,
@@ -325,8 +369,42 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         )
         val requestBytes = RustCodec.encodeSelectNextRequest(request)
         val responseBytes = RustBridge.selectNext(requestBytes)
-        val response = RustCodec.decodeSelectNextResponse(responseBytes)
-        applySelectionResponse(response)
+        return RustCodec.decodeSelectNextResponse(responseBytes)
+    }
+
+    private suspend fun playSelectedNext() {
+        applySelectionResponse(requestSelectNext())
+    }
+
+    /** 手動再生専用の曲ならRustを介さず再生、通常曲ならsetCurrentTrack経由で再生する。 */
+    private suspend fun playTrackById(trackId: String) {
+        if (trackId in _manualOnlyTrackIds.value) {
+            playManualOnlyTrack(trackId)
+        } else {
+            setCurrentTrackAndApply(trackId)
+        }
+    }
+
+    /**
+     * 手動再生専用の曲(ライブのフルセット等)を再生する。
+     * Rustの選曲状態(current_track_id / ShortWave / BigWave)には一切触れないので、
+     * セット1本ぶんの長い曲がトレンド分析や波形グラフを汚さない。
+     * Rust側の状態も、すでにある先読み結果(prefetchedNext)もそのまま残すため、
+     * セットが終わったらその先読み済みの曲から、通常のAuto DJが何事もなかったように続く。
+     */
+    private suspend fun playManualOnlyTrack(trackId: String) {
+        val trackFiles = trackFilesById[trackId] ?: return
+        _loopEnabled.value = false
+        _selectedTrackId.value = trackId
+        _selectionHistory.value = _selectionHistory.value + trackId
+
+        withContext(Dispatchers.Main) {
+            controller?.setMediaItem(
+                MusicStorage.mediaItemFor(trackFiles.audioSource, MusicStorage.displayTitle(trackId))
+            )
+            controller?.prepare()
+            controller?.play()
+        }
     }
 
     /** setCurrentTrack(スコアリング無しの手動指定)を呼び、結果を反映する共通処理。 */
@@ -349,7 +427,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         _autoDjEnabled.value = true
         _queuedTrackId.value = null
         viewModelScope.launch(Dispatchers.IO) {
-            setCurrentTrackAndApply(trackId)
+            playTrackById(trackId)
         }
     }
 

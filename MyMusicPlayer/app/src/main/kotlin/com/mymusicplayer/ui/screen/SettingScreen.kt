@@ -28,13 +28,32 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.mymusicplayer.player.PlayerViewModel
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import com.mymusicplayer.storage.MusicImporter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToEditTracks: () -> Unit,
     viewModel: PlayerViewModel
 ) {
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp)
+    ) {
         IconButton(onClick = onNavigateBack) {
             Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
         }
@@ -53,6 +72,8 @@ fun SettingsScreen(
             status = viewModel.libraryStatus.collectAsState().value,
             onReload = { viewModel.initRustLibrary() }
         )
+
+        ImportSection(viewModel, onNavigateToEditTracks)
     }
 }
 
@@ -186,6 +207,73 @@ private fun MultiplierSlider(label: String, value: Float, onValueChange: (Float)
             value = value,
             onValueChange = onValueChange,
             valueRange = 0f..2f
+        )
+    }
+}
+
+/**
+ * 曲の取り込み(SAFでファイルを選び、music/ または live_music/ にコピーする)。
+ * music: Auto DJの対象(.mp3 と .mmz)、live_music: 手動再生専用(.mp3のみ)。
+ */
+@Composable
+private fun ImportSection(viewModel: PlayerViewModel, onNavigateToEditTracks: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var showDestinationDialog by remember { mutableStateOf(false) }
+    var pendingDestination by remember { mutableStateOf(MusicImporter.Destination.MUSIC) }
+
+    val pickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            val destination = pendingDestination
+            scope.launch {
+                val result = withContext(Dispatchers.IO) {
+                    MusicImporter.importFiles(context, uris, destination)
+                }
+                if (result.copied.isNotEmpty()) {
+                    viewModel.initRustLibrary()
+                }
+                Toast.makeText(
+                    context,
+                    "取り込み ${result.copied.size}件 / 対象外 ${result.skipped.size}件 / 失敗 ${result.failed.size}件",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    Row(
+        modifier = Modifier.padding(top = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Button(onClick = { showDestinationDialog = true }) {
+            Text("曲を追加")
+        }
+        Button(onClick = onNavigateToEditTracks) {
+            Text("曲の編集")
+        }
+    }
+
+    if (showDestinationDialog) {
+        AlertDialog(
+            onDismissRequest = { showDestinationDialog = false },
+            title = { Text("取り込み先") },
+            text = { Text("music: Auto DJの対象(.mp3 と .mmz)\nlive_music: 手動再生専用(.mp3のみ)") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingDestination = MusicImporter.Destination.MUSIC
+                    showDestinationDialog = false
+                    pickerLauncher.launch(arrayOf("*/*"))
+                }) { Text("music") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    pendingDestination = MusicImporter.Destination.LIVE
+                    showDestinationDialog = false
+                    pickerLauncher.launch(arrayOf("*/*"))
+                }) { Text("live_music") }
+            }
         )
     }
 }
