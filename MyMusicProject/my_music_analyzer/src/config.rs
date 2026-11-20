@@ -8,6 +8,6 @@ pub const FRAME_SIZE: usize = 1024;
 
 pub const HOP_SIZE: usize = 512;
 
-pub const INPUT_DIR: &str = r"E:\Input";
+pub const INPUT_DIR: &str = r"E:\Trimmed";
 pub const OUTPUT_DIR: &str = r"E:\Output";
 pub const SUMMARY_DIR: &str = r"E:\Summary";

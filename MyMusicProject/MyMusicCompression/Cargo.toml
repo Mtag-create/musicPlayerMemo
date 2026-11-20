@@ -1,0 +1,10 @@
+[package]
+name = "MyMusicCompression"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mp3lame-encoder = "0.2.5"
+rayon = "1.11"
+
+[workspace]
