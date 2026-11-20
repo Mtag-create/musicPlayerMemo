@@ -65,7 +65,7 @@ pub extern "system" fn Java_com_mymusicplayer_rust_RustBridge_initLibrary<'local
 
                     let track_count = tracks.len();
                     let library = Library::new(tracks);
-                    let success = state::init(library);
+                    let success = state::replace_library(library);
 
                     InitLibraryResponse {
                         success,

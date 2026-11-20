@@ -10,10 +10,10 @@ use crate::data::track::TrackId;
 use crate::selection::flow::big_wave::BigWave;
 
 /// 直前(distance=1)のペナルティ最大値。仮の値。
-const MAX_HISTORY_PENALTY: f32 = 4.0;
+const MAX_HISTORY_PENALTY: f32 = 10.0;
 
 /// 減衰率(0〜1)。値が小さいほど急速に0へ近づく。仮の値。
-const HISTORY_DECAY_RATE: f32 = 0.96;
+const HISTORY_DECAY_RATE: f32 = 0.98;
 
 /// Big Wave上でtrack_idが「末尾(直前)から何番目か」を距離として求め、
 /// 指数関数的に減衰するペナルティ(0以下)を返す。
@@ -27,7 +27,7 @@ pub fn history_bonus(big_wave: &BigWave, track_id: &TrackId) -> f32 {
         .map(|i| i + 1); // 末尾(直前に選ばれた曲)がdistance=1
 
     match distance {
-        Some(d) => -MAX_HISTORY_PENALTY * HISTORY_DECAY_RATE.powi(d as i32 - 1),
+        Some(d) => -(MAX_HISTORY_PENALTY * HISTORY_DECAY_RATE.powi(d as i32 - 1) - 1.0).max(0.0),
         None => 0.0,
     }
 }

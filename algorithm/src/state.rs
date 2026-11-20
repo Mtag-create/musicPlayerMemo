@@ -30,6 +30,19 @@ pub fn init(library: Library) -> bool {
     STATE.set(Mutex::new(state)).is_ok()
 }
 
+/// ライブラリだけを差し替える。履歴(Wave)・現在曲・EnergyCurveはそのまま引き継ぐ。
+/// 未初期化なら、通常の初期化(init)として扱う。
+pub fn replace_library(library: Library) -> bool {
+    match STATE.get() {
+        Some(mutex) => {
+            let mut guard = mutex.lock().unwrap();
+            guard.library = library;
+            true
+        }
+        None => init(library),
+    }
+}
+
 /// 状態にアクセスする。init()が未実行の場合はNoneを返す。
 pub fn with_state<F, R>(f: F) -> Option<R>
 where
