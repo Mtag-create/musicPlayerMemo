@@ -1,0 +1,40 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# c "URL" : 取得 → トリミング → 解析 → MP3 を MyMusicFolder に作る
+set -e
+
+URL="$1"
+if [ -z "$URL" ]; then
+  echo '使い方: c "URL"'
+  exit 1
+fi
+
+BASE="$HOME/storage/downloads/MyMusicFolder"
+PROJ="$HOME/mmp/MyMusicProject"
+
+mkdir -p "$BASE"/{Music,Trim,MP3,Analysis,Summary}
+
+# 処理中にTermuxが止まらないようにする
+termux-wake-lock
+trap 'termux-wake-unlock' EXIT
+
+echo "[1/5] 取得 (yt-dlp → Music/)"
+yt-dlp --no-playlist -x --audio-format wav --restrict-filenames \
+  --postprocessor-args "ffmpeg:-ar 44100 -ac 2" \
+  -o "$BASE/Music/%(title)s.%(ext)s" \
+  "$URL"
+
+echo "[2/5] トリミング (Music → Trim)"
+"$PROJ/MyMusicTrimmer/target/release/my_music_trimmer"
+
+echo "[3/5] 解析 (Trim → Analysis)"
+"$PROJ/target/release/my_music_analyzer"
+
+echo "[4/5] MP3エンコード (Trim → MP3)"
+"$PROJ/MyMusicCompression/target/release/MyMusicCompression"
+
+echo "[5/5] 索引を更新 (MMPの選択画面に出やすくする)"
+for f in /storage/emulated/0/Download/MyMusicFolder/MP3/* /storage/emulated/0/Download/MyMusicFolder/Summary/*; do
+  am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file://$f" > /dev/null 2>&1 || true
+done
+
+echo "完了: $BASE"
